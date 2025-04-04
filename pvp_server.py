@@ -1,9 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import threading
 import time
 import random
-from database import db
 
 app = Flask(__name__)
 CORS(app)  # Дозволяємо крос-доменні запити
@@ -131,8 +130,13 @@ def battle_page(battle_id):
     if len(battle.get("players_ready", [])) == 2:
         battle["status"] = "started"
 
-    return "Бойова сторінка"  # Тут буде ваш HTML/JS для бою
+    # Визначаємо, хто є суперником
+    opponent = battle["player2"] if user_id == battle["player1"]["user_id"] else battle["player1"]
 
+    return render_template("pvp_battle.html",
+                           battle_id=battle_id,
+                           user_id=user_id,
+                           opponent=opponent)
 
 if __name__ == "__main__":
     print("🛠️ Запуск PvP сервера...")
