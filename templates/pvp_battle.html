@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>⚔️ PvP Бій</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 10px;
+            text-align: center;
+            overflow-x: hidden;
+            -webkit-text-size-adjust: none;
+            text-size-adjust: none;
+        }
+
+        .battle-container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 15px;
+            background-color: #1e1e1e;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .player-info {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        @media (min-width: 500px) {
+            .player-info {
+                flex-direction: row;
+                justify-content: space-between;
+            }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateX(-50%) translateY(0); }
+            to { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+        }
+
+        .hit-effect {
+            animation: fadeOut 1s forwards;
+        }
+        .player {
+            width: 100%;
+            padding: 10px;
+            background-color: #252525;
+            border-radius: 8px;
+        }
+
+        .health-bar {
+            height: 20px;
+            background-color: #333;
+            border-radius: 10px;
+            margin-top: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .health-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 100%;
+            transition: width 0.3s;
+        }
+
+        .opponent .health-fill {
+            background-color: #f44336;
+        }
+
+        #hit-zone-container {
+            position: relative;
+            width: 100%;
+            margin: 25px 0;
+        }
+
+        #hit-zone {
+            width: 100%;
+            height: 60px;
+            background-color: #252525;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #target-line {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg,
+                rgba(255, 0, 0, 0.3) 0%,
+                rgba(255, 0, 0, 0.3) 20%,
+                rgba(255, 165, 0, 0.3) 20%,
+                rgba(255, 165, 0, 0.3) 40%,
+                rgba(0, 255, 0, 0.3) 40%,
+                rgba(0, 255, 0, 0.3) 60%,
+                rgba(255, 165, 0, 0.3) 60%,
+                rgba(255, 165, 0, 0.3) 80%,
+                rgba(255, 0, 0, 0.3) 80%,
+                rgba(255, 0, 0, 0.3) 100%);
+            pointer-events: none;
+        }
+
+        #target {
+            position: absolute;
+            left: -50px;
+            top: 0;
+            width: 50px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            transition: left 0.05s linear;
+            border-radius: 4px;
+            pointer-events: auto;
+        }
+
+        .hit-zones-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .round-info {
+            margin: 20px 0;
+            font-size: 1.2em;
+            color: #ff9800;
+        }
+
+        .damage-popup {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            animation: popup 1s forwards;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @keyframes popup {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-50px); }
+        }
+
+        .zone-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+        }
+
+        .zone-label {
+            font-size: 12px;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .miss-label {
+            background-color: rgba(255, 0, 0, 0.3);
+            color: #ff6b6b;
+        }
+
+        .normal-label {
+            background-color: rgba(255, 165, 0, 0.3);
+            color: #ffcc5c;
+        }
+
+        .crit-label {
+            background-color: rgba(0, 255, 0, 0.3);
+            color: #88ff88;
+        }
+
+        #battle-result {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            flex-direction: column;
+        }
+
+        .result-message {
+            font-size: 2em;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .close-btn {
+            padding: 10px 20px;
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .timing-container {
+            width: calc(100% - 20px);
+            margin: 30px auto 0;
+            position: relative;
+        }
+
+        .timing-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #333;
+            border-radius: 4px;
+            position: relative;
+            overflow: visible;
+        }
+
+        .timing-indicator {
+            position: absolute;
+            left: -15px;
+            top: 0;
+            width: 15px;
+            height: 100%;
+            background-color: #ffffff;
+            border-radius: 4px;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.7);
+            transition: left 0.05s linear;
+            z-index: 2;
+        }
+
+        .hit-area {
+            position: absolute;
+            bottom: -40px;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            background-color: transparent;
+            z-index: 5;
+        }
+
+        .timing-zones {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+        }
+
+        .timing-zone {
+            height: 100%;
+        }
+
+        .zone-miss {
+            background-color: rgba(255, 0, 0, 0.2);
+        }
+
+        .zone-normal {
+            background-color: rgba(255, 165, 0, 0.2);
+        }
+
+        .zone-crit {
+            background-color: rgba(0, 255, 0, 0.3);
+        }
+
+        .zone-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+
+        .zone-label {
+            font-size: 12px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            width: 20%;
+            text-align: center;
+        }
+
+        .player-turn-indicator {
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .active-turn {
+            background-color: #4CAF50;
+        }
+
+        .inactive-turn {
+            background-color: #666;
+        }
+
+        .inactive-player {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="battle-container">
+        <h1>⚔️ PvP Бій</h1>
+
+        <div id="turn-indicator" class="player-turn-indicator active-turn">Ваш хід</div>
+
+        <div class="player-info">
+            <div class="player opponent" id="opponent-container">
+                <h2 id="opponent-name">Суперник</h2>
+                <div>HP: <span id="opponent-hp">100</span>/<span id="opponent-max-hp">100</span></div>
+                <div class="health-bar">
+                    <div class="health-fill" id="opponent-health"></div>
+                </div>
+            </div>
+
+            <div class="player" id="player-container">
+                <h2 id="player-name">Ви</h2>
+                <div>HP: <span id="player-hp">100</span>/<span id="player-max-hp">100</span></div>
+                <div class="health-bar">
+                    <div class="health-fill" id="player-health"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="round-info">
+            Раунд: <span id="round-number">1</span>
+        </div>
+
+        <div id="hit-zone-container">
+            <div id="hit-zone">
+                <div id="target-line"></div>
+                <div id="target"></div>
+            </div>
+            <div class="timing-container">
+                <div class="timing-bar">
+                    <div class="timing-zones">
+                        <div class="timing-zone zone-miss" style="width: 20%"></div>
+                        <div class="timing-zone zone-normal" style="width: 20%"></div>
+                        <div class="timing-zone zone-crit" style="width: 20%"></div>
+                        <div class="timing-zone zone-normal" style="width: 20%"></div>
+                        <div class="timing-zone zone-miss" style="width: 20%"></div>
+                    </div>
+                    <div class="timing-indicator"></div>
+                </div>
+                <div class="hit-area" id="hit-area"></div>
+                <div class="zone-labels">
+                    <div class="zone-label miss-label">Промах</div>
+                    <div class="zone-label normal-label">Звичайний</div>
+                    <div class="zone-label crit-label">Критичний</div>
+                    <div class="zone-label normal-label">Звичайний</div>
+                    <div class="zone-label miss-label">Промах</div>
+                </div>
+            </div>
+        </div>
+
+    <div id="battle-result">
+        <div class="result-message" id="result-message"></div>
+        <button class="close-btn" onclick="closeResult()">Закрити</button>
+    </div>
+        <script>
+        // Отримуємо параметри з URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+        const username = urlParams.get('username');
+        let playerHealth = parseInt(urlParams.get('health')) || 100;
+        const playerMaxHealth = parseInt(urlParams.get('max_health')) || 100;
+        const playerDamage = parseInt(urlParams.get('damage')) || 10;
+        const playerCritChance = parseFloat(urlParams.get('crit_chance')) || 0.1;
+
+        // Ініціалізація інтерфейсу
+        document.getElementById('player-name').textContent = username || 'Ви';
+        updatePlayerHealth(playerHealth, playerMaxHealth);
+
+        // Змінні бою
+        let currentRound = 1;
+        let battleActive = true;
+        let opponentHealth = 100;
+        let opponentMaxHealth = 100;
+        let timingInterval;
+        let isPlayerTurn = true;
+        let baseSpeed = 3;
+        let enemyAttacks = 0;
+        const maxEnemyAttacks = 1; // Обмежуємо кількість атак противника за хід
+
+        // Оновлення здоров'я гравця
+        function updatePlayerHealth(current, max) {
+            playerHealth = current;
+            document.getElementById('player-hp').textContent = current;
+            document.getElementById('player-max-hp').textContent = max;
+            document.getElementById('player-health').style.width = `${(current / max) * 100}%`;
+        }
+
+        // Оновлення здоров'я противника
+        function updateOpponentHealth(current, max) {
+            opponentHealth = current;
+            opponentMaxHealth = max;
+            document.getElementById('opponent-hp').textContent = current;
+            document.getElementById('opponent-max-hp').textContent = max;
+            document.getElementById('opponent-health').style.width = `${(current / max) * 100}%`;
+        }
+
+        // Оновлення індикатора ходу
+        function updateTurnIndicator() {
+            const indicator = document.getElementById('turn-indicator');
+            if (isPlayerTurn) {
+                indicator.textContent = "Ваш хід";
+                indicator.className = "player-turn-indicator active-turn";
+                document.getElementById('player-container').classList.remove('inactive-player');
+                document.getElementById('opponent-container').classList.add('inactive-player');
+            } else {
+                indicator.textContent = "Хід суперника";
+                indicator.className = "player-turn-indicator inactive-turn";
+                document.getElementById('player-container').classList.add('inactive-player');
+                document.getElementById('opponent-container').classList.remove('inactive-player');
+            }
+        }
+
+        // Рух індикатора таймінгу
+        function startTiming() {
+            const timingBar = document.querySelector('.timing-indicator');
+            const timingBarWidth = document.querySelector('.timing-bar').offsetWidth;
+            let position = -15;
+            let direction = 1;
+            const speed = (baseSpeed + currentRound * 0.3) * (timingBarWidth / 100); // Зменшимо приріст швидкості
+
+            if (timingInterval) clearInterval(timingInterval);
+
+            timingInterval = setInterval(() => {
+                if (!battleActive) {
+                    clearInterval(timingInterval);
+                    return;
+                }
+
+                position += direction * speed;
+
+                if (position >= timingBarWidth - 15) {
+                    position = timingBarWidth - 15;
+                    direction = -1;
+
+                    // Додаємо перевірку для противника
+                    if (!isPlayerTurn && enemyAttacks >= maxEnemyAttacks) {
+                        clearInterval(timingInterval);
+                        endEnemyTurn();
+                        return;
+                    }
+                } else if (position <= -15) {
+                    position = -15;
+                    direction = 1;
+
+                    if (!isPlayerTurn && enemyAttacks < maxEnemyAttacks) {
+                        enemyAttack();
+                    }
+                }
+
+                timingBar.style.left = `${position}px`;
+            }, 16);
+        }
+
+        // Завершення ходу противника
+        function endEnemyTurn() {
+            enemyAttacks = 0;
+            isPlayerTurn = true;
+            currentRound++;
+            document.getElementById('round-number').textContent = currentRound;
+            updateTurnIndicator();
+            startTiming();
+        }
+
+        // Обробник кліку по зоні удару
+        document.getElementById('hit-area').addEventListener('click', () => {
+            if (!battleActive || !isPlayerTurn) return;
+
+            const timingBar = document.querySelector('.timing-indicator');
+            const timingBarWidth = document.querySelector('.timing-bar').offsetWidth;
+            const indicatorPosition = parseInt(timingBar.style.left) + 15;
+
+            const percentPosition = (indicatorPosition / timingBarWidth) * 100;
+
+            let hitType = 'miss';
+            let damage = 0;
+
+            // Визначаємо тип удару
+            if (percentPosition >= 40 && percentPosition <= 60) {
+                hitType = 'crit';
+                damage = playerDamage * 2;
+                console.log(`Критичний удар (${percentPosition.toFixed(1)}%)`);
+            } else if ((percentPosition >= 20 && percentPosition < 40) ||
+                       (percentPosition > 60 && percentPosition <= 80)) {
+                hitType = 'normal';
+                damage = playerDamage;
+                console.log(`Звичайний удар (${percentPosition.toFixed(1)}%)`);
+            } else {
+                console.log(`Промах (${percentPosition.toFixed(1)}%)`);
+            }
+
+            clearInterval(timingInterval);
+            isPlayerTurn = false;
+            updateTurnIndicator();
+
+            if (damage > 0) {
+                const newOpponentHealth = Math.max(0, opponentHealth - damage);
+                updateOpponentHealth(newOpponentHealth, opponentMaxHealth);
+                showHitEffect(hitType, damage);
+
+                if (newOpponentHealth <= 0) {
+                    endBattle(true);
+                    return;
+                }
+            } else {
+                showHitEffect('miss', 0);
+            }
+
+            // Запускаємо хід противника через 1 секунду
+            setTimeout(() => {
+                isPlayerTurn = false;
+                updateTurnIndicator();
+                startTiming();
+            }, 1000);
+        });
+
+        // Атака противника
+        function enemyAttack() {
+            if (!battleActive || enemyAttacks >= maxEnemyAttacks) return;
+
+            enemyAttacks++;
+            const enemyDamage = Math.floor(Math.random() * 10) + 5;
+            const newPlayerHealth = Math.max(0, playerHealth - enemyDamage);
+
+            setTimeout(() => {
+                updatePlayerHealth(newPlayerHealth, playerMaxHealth);
+                showHitEffect('normal', enemyDamage);
+
+                if (newPlayerHealth <= 0) {
+                    endBattle(false);
+                }
+            }, 500);
+        }
+
+        // Показ ефекту удару
+        function showHitEffect(hitType, damage) {
+            const effect = document.createElement('div');
+            effect.className = 'hit-effect';
+
+            if (hitType === 'crit') {
+                effect.textContent = `-${damage} CRIT!`;
+                effect.style.color = '#4CAF50';
+            } else if (hitType === 'normal') {
+                effect.textContent = `-${damage}`;
+                effect.style.color = '#FFEB3B';
+            } else {
+                effect.textContent = 'MISS!';
+                effect.style.color = '#F44336';
+            }
+
+            effect.style.position = 'absolute';
+            effect.style.bottom = '80px';
+            effect.style.left = '50%';
+            effect.style.transform = 'translateX(-50%)';
+            effect.style.fontSize = '24px';
+            effect.style.fontWeight = 'bold';
+            effect.style.animation = 'fadeOut 1s forwards';
+
+            document.body.appendChild(effect);
+
+            setTimeout(() => {
+                effect.remove();
+            }, 1000);
+        }
+
+        // Завершення бою
+        function endBattle(isWinner) {
+            battleActive = false;
+            clearInterval(timingInterval);
+
+            const resultMessage = isWinner ? "🎉 Ви перемогли!" : "😞 Ви програли...";
+            document.getElementById('result-message').textContent = resultMessage;
+            document.getElementById('battle-result').style.display = 'flex';
+        }
+
+        // Закриття результату
+        function closeResult() {
+            document.getElementById('battle-result').style.display = 'none';
+            window.close();
+        }
+
+        // Ініціалізація бою
+        function initBattle() {
+            updateTurnIndicator();
+            startTiming();
+        }
+
+        // Запуск гри
+        initBattle();
+    </script>
+    </div>
+    </body>
+</html>
