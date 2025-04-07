@@ -24,10 +24,14 @@ logger = logging.getLogger(__name__)
 
 def matchmaking_worker():
     """Покращений воркер для пошуку матчів"""
+    logger.info("Matchmaking worker started")  # Додано лог старту
     while True:
         try:
             with queue_lock:
-                if len(matchmaking_queue) >= 2:
+                current_size = len(matchmaking_queue)
+                logger.debug(f"Current queue size: {current_size}")  # Додано лог розміру черги
+
+                if current_size >= 2:
                     player1 = matchmaking_queue.popleft()
                     player2 = matchmaking_queue.popleft()
 
@@ -44,8 +48,11 @@ def matchmaking_worker():
                     logger.info(f"Created battle {battle_id}: "
                                 f"{player1['username']} vs {player2['username']}")
 
+                    # Додаткова перевірка
+                    logger.debug(f"Remaining queue size: {len(matchmaking_queue)}")
+
         except Exception as e:
-            logger.error(f"Matchmaking error: {e}")
+            logger.error(f"Matchmaking error: {e}", exc_info=True)  # Додано повну інформацію про виняток
         finally:
             time.sleep(0.5)
 
@@ -157,11 +164,29 @@ def battle_page(battle_id):
                            user_id=user_id,
                            opponent=opponent)
 
+
 if __name__ == "__main__":
-    print("🛠️ Запуск PvP сервера...")
+    logger.info("🛠️ Запуск PvP сервера...")
 
-    # Запускаємо потік для пошуку матчів (використовуємо правильну назву функції)
-    threading.Thread(target=matchmaking_worker, daemon=True).start()
+    # Додамо перевірку перед запуском потоку
+    logger.info("Запуск matchmaking worker...")
+    matchmaking_thread = threading.Thread(target=matchmaking_worker, daemon=True)
+    matchmaking_thread.start()
+    logger.info(f"Matchmaking worker status: {matchmaking_thread.is_alive()}")
 
-    # Запускаємо Flask сервер
-    app.run(host="0.0.0.0", port=5000, threaded=True)
+    # Налаштування Flask
+    app.run(host="0.0.0.0", port=5000, threaded=True, use_reloader=False)
+
+
+@app.route('/debug_info')
+def debug_info():
+    with queue_lock:
+        queue_size = len(matchmaking_queue)
+    with battle_lock:
+        battles_count = len(active_battles)
+
+    return jsonify({
+        "queue_size": queue_size,
+        "active_battles": battles_count,
+        "matchmaking_thread_alive": matchmaking_thread.is_alive() if 'matchmaking_thread' in globals() else False
+    })
