@@ -4,24 +4,29 @@ from flask_cors import CORS
 import threading
 import time
 import random
+import logging
 from collections import deque
 
 app = Flask(__name__)
 CORS(app)
 
 # Використовуємо deque для швидших операцій з чергою
+# Глобальні змінні
 matchmaking_queue = deque()
 active_battles = {}
 queue_lock = threading.Lock()
 battle_lock = threading.Lock()
 
+# Налаштування логування
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def run_matchmaking():
-    """Покращена функція пошуку суперників"""
+
+def matchmaking_worker():
+    """Покращений воркер для пошуку матчів"""
     while True:
         try:
             with queue_lock:
-                # Якщо в черзі є як мінімум 2 гравці
                 if len(matchmaking_queue) >= 2:
                     player1 = matchmaking_queue.popleft()
                     player2 = matchmaking_queue.popleft()
@@ -32,38 +37,30 @@ def run_matchmaking():
                         active_battles[battle_id] = {
                             "player1": player1,
                             "player2": player2,
-                            "start_time": time.time(),
                             "status": "waiting",
-                            "players_ready": []
+                            "created_at": time.time()
                         }
 
-                    print(f"⚔️ Створено бій {battle_id}:")
-                    print(f"   {player1['username']} (lvl {player1['level']})")
-                    print(f"   vs")
-                    print(f"   {player2['username']} (lvl {player2['level']})")
+                    logger.info(f"Created battle {battle_id}: "
+                                f"{player1['username']} vs {player2['username']}")
 
         except Exception as e:
-            print(f"Помилка у matchmaking: {e}")
+            logger.error(f"Matchmaking error: {e}")
+        finally:
+            time.sleep(0.5)
 
-        time.sleep(0.5)  # Зменшуємо інтервал перевірки
 
-
-@app.route("/join_queue", methods=["POST"])
+@app.route('/join_queue', methods=['POST'])
 def join_queue():
     try:
-        player_data = request.json
-        user_id = player_data["user_id"]
-
+        player = request.json
         with queue_lock:
-            # Перевіряємо, чи гравець вже в черзі
-            if any(p["user_id"] == user_id for p in matchmaking_queue):
-                return jsonify({
-                    "status": "already_in_queue",
-                    "queue_size": len(matchmaking_queue)
-                })
+            # Перевірка на повторне додавання
+            if any(p['user_id'] == player['user_id'] for p in matchmaking_queue):
+                return jsonify({"status": "already_in_queue"})
 
-            matchmaking_queue.append(player_data)
-            print(f"➕ {player_data['username']} доданий в чергу. Розмір черги: {len(matchmaking_queue)}")
+            matchmaking_queue.append(player)
+            logger.info(f"Player {player['username']} added to queue. Size: {len(matchmaking_queue)}")
 
             return jsonify({
                 "status": "searching",
@@ -71,37 +68,48 @@ def join_queue():
             })
 
     except Exception as e:
-        print(f"Помилка в join_queue: {e}")
+        logger.error(f"Join queue error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/check_battle", methods=["POST"])
+@app.route('/check_battle', methods=['POST'])
 def check_battle():
     try:
-        user_id = request.json.get("user_id")
-
+        user_id = request.json.get('user_id')
         with battle_lock:
+            # Пошук активного бою для гравця
             for battle_id, battle in active_battles.items():
-                if battle["status"] == "waiting":
-                    if user_id == battle["player1"]["user_id"]:
+                if battle['status'] == 'waiting':
+                    if user_id in [battle['player1']['user_id'], battle['player2']['user_id']]:
+                        opponent = (battle['player2'] if user_id == battle['player1']['user_id']
+                                    else battle['player1'])
                         return jsonify({
                             "status": "found",
                             "battle_id": battle_id,
-                            "opponent": battle["player2"]
-                        })
-                    elif user_id == battle["player2"]["user_id"]:
-                        return jsonify({
-                            "status": "found",
-                            "battle_id": battle_id,
-                            "opponent": battle["player1"]
+                            "opponent": opponent
                         })
 
-        return jsonify({"status": "searching", "queue_size": len(matchmaking_queue)})
+        return jsonify({
+            "status": "searching",
+            "queue_size": len(matchmaking_queue)
+        })
 
     except Exception as e:
-        print(f"Помилка в check_battle: {e}")
+        logger.error(f"Check battle error: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+if __name__ == '__main__':
+    # Запускаємо воркер у окремому потоці
+    threading.Thread(target=matchmaking_worker, daemon=True).start()
+
+    # Налаштування Flask
+    app.run(
+        host='0.0.0.0',
+        port=5000,
+        threaded=True,
+        use_reloader=False  # Вимкнути reloader для коректної роботи потоків
+    )
 
 @app.route("/cancel_queue", methods=["POST"])
 def cancel_queue():
@@ -152,8 +160,8 @@ def battle_page(battle_id):
 if __name__ == "__main__":
     print("🛠️ Запуск PvP сервера...")
 
-    # Запускаємо потік для пошуку матчів
-    threading.Thread(target=run_matchmaking, daemon=True).start()
+    # Запускаємо потік для пошуку матчів (використовуємо правильну назву функції)
+    threading.Thread(target=matchmaking_worker, daemon=True).start()
 
     # Запускаємо Flask сервер
     app.run(host="0.0.0.0", port=5000, threaded=True)
